@@ -1,0 +1,7 @@
+torch==1.9.0+cu111
+torchvision==0.10.0+cu111
+pillow>=7.2.0
+opencv-python==4.4.0.44
+pytorch3d==0.6.0
+scipy
+tensorboard
