@@ -133,7 +133,7 @@ def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
 
     if args.gpu is not None:
-        print("Use GPU: {} for training".format(args.gpu))
+        print(f"Use GPU: {args.gpu} for training")
 
     if args.distributed:
         if args.dist_url == "env://" and args.rank == -1:
@@ -173,10 +173,10 @@ def main_worker(gpu, ngpus_per_node, args):
         discriminator = torch.nn.DataParallel(discriminator)
 
     criterion_per = PerceptualLoss(model_type=args.perceptual_model)
-    criterion_l1 = torch.nn.L1Loss()
-    criterion_l2 = torch.nn.MSELoss()
+    criterion_l1 = nn.L1Loss()
+    criterion_l2 = nn.MSELoss()
     criterion_wdiv = WGAN_DIV_Loss()
-    criterion_cos = torch.nn.CosineSimilarity()
+    criterion_cos = nn.CosineSimilarity()
 
     if args.gpu is not None:
         criterion_per.cuda(args.gpu)
@@ -190,9 +190,8 @@ def main_worker(gpu, ngpus_per_node, args):
     
     if args.resume and os.path.isfile(args.resume):
         dist.barrier()
-        # map_location = {'cuda:%d' % 0: 'cuda:%d' % args.rank}
         map_location = 'cpu'
-        print("Loading checkpoint '{}'".format(args.resume))
+        print(f"Loading checkpoint '{args.resume}'")
         checkpoint = torch.load(args.resume, map_location=map_location)
         args.start_epoch = checkpoint['epoch'] + 1
         model.load_state_dict(checkpoint['G_state_dict'])
@@ -253,7 +252,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'D_lr' : scheduler_D.get_last_lr()
             }, args.checkpoint_path, epoch, len(train_loader)*(epoch+1))
 
-            torch.save(model.state_dict(), args.checkpoint_path + '/CFRNet_G_ep{}.pth'.format(epoch+1))
+            torch.save(model.state_dict(), f'{args.checkpoint_path}/CFRNet_G_ep{epoch+1}.pth')
 
 def train(train_loader, valid_loader, nets, criterion_per, optimizer_G, optimizer_D, schedulers, epoch, args):
     val_iter = iter(valid_loader)

@@ -4,26 +4,30 @@ from ctypes import ArgumentError
 import os ; import sys 
 os.chdir( os.path.split( os.path.realpath( sys.argv[0] ) )[0] ) 
 
+import torch
+import torch.backends.cudnn as cudnn
+
 # Set CUDA device and configurations
-torch.cuda.set_device(0)
-cudnn.benchmark = True
-cudnn.deterministic = True
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
-torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
-torch.backends.cudnn.allow_fp16_reduced_precision_reduction = True
+if torch.cuda.is_available():
+    torch.cuda.set_device(0)
+    cudnn.benchmark = True
+    cudnn.deterministic = True
+    # Enable TF32 for better performance on Ampere GPUs
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    # Set memory allocator settings
+    torch.cuda.set_per_process_memory_fraction(0.8)  # Use up to 80% of GPU memory
+    torch.cuda.empty_cache()
 
 from mmRegressor.network.resnet50_task import *
 from mmRegressor.preprocess_img import Preprocess
 from mmRegressor.load_data import *
 from mmRegressor.reconstruct_mesh import Reconstruction, Compute_rotation_matrix, _need_const, Projection_layer
 
-import torch
 import numpy as np
 import torchvision.transforms as transforms
 import torch.nn.functional as F
 import cv2, glob
-# from torchsummary import summary
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import Textures
 from pytorch3d.renderer import (
@@ -44,7 +48,7 @@ if os.path.exists('Pytorch_Retinaface'):
     from Pytorch_Retinaface.utils.box_utils import decode, decode_landm
 
 
-class Estimator3D(object):
+class Estimator3D:
     def __init__(self, is_cuda=True, batch_size=1, render_size=224, test=True, model_path=None, back_white=False, cuda_id=0, det_net=None):
         self.is_cuda = is_cuda
         self.render_size = render_size
@@ -66,18 +70,18 @@ class Estimator3D(object):
         if model_path is None:
             print('Load pretrained weights')
         else:
-            print('Load {}'.format(model_path))
+            print(f'Load {model_path}')
         self.load_3dmm_models(model_path, test)
         self.to_tensor = transforms.Compose([
             transforms.ToTensor(),
         ])
                 
         self.argmax = lambda i, c: c[i]
-        self.thresholding = torch.nn.Threshold(0.3, 0.0)
+        self.thresholding = nn.Threshold(0.3, 0.0)
 
         tri = self.face_model.tri
         tri = np.expand_dims(tri, 0)
-        self.tri = torch.FloatTensor(tri).repeat(batch_size, 1, 1)
+        self.tri = torch.tensor(tri, dtype=torch.float32).repeat(batch_size, 1, 1)
 
         self.skin_mask = -1*self.face_model.skin_mask.unsqueeze(-1)
         
@@ -116,7 +120,7 @@ class Estimator3D(object):
         if model_path is None:
             regressor.load_state_dict(torch.load("mmRegressor/network/th_model_params.pth"))
         else:
-            regressor.load_state_dict(torch.load(model_path, map_location='cuda:'+str(self.cuda_id)))
+            regressor.load_state_dict(torch.load(model_path, map_location=f'cuda:{self.cuda_id}'))
 
         if test:
             regressor.eval()

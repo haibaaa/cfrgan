@@ -18,14 +18,14 @@ if torch.cuda.is_available():
 
 class PerceptualLoss(nn.Module):
     def __init__(self, model_type='vgg'):
-        super(PerceptualLoss, self).__init__()
+        super().__init__()
         if model_type == 'vgg':
             from model.vgg import VGG19
             self.vgg = VGG19()
             if torch.cuda.is_available():
                 self.vgg = self.vgg.cuda()
         else:
-            raise NotImplementedError('Model type [%s] is not implemented' % model_type)
+            raise NotImplementedError(f'Model type [{model_type}] is not implemented')
         self.criterion = nn.L1Loss()
         self.weights = [1.0/32, 1.0/16, 1.0/8, 1.0/4, 1.0]
 
@@ -35,8 +35,10 @@ class PerceptualLoss(nn.Module):
 
 class VGGLoss(nn.Module):
     def __init__(self):
-        super(VGGLoss, self).__init__()
-        self.vgg = VGG19().cuda()
+        super().__init__()
+        self.vgg = VGG19()
+        if torch.cuda.is_available():
+            self.vgg = self.vgg.cuda()
         self.criterion = nn.MSELoss()
         self.weights = [1.0 / 32, 1.0 / 16, 1.0 / 8, 1.0 / 4, 1.0]
 
@@ -49,9 +51,9 @@ class VGGLoss(nn.Module):
 
 class ResLoss(nn.Module):
     def __init__(self):
-        super(ResLoss, self).__init__()
+        super().__init__()
         self.criterion = nn.L1Loss()
-        resnet = resnet50(pretrained=True)
+        resnet = resnet50(weights='IMAGENET1K_V2')
 
         self.B1 = nn.Sequential(
             resnet.conv1,
@@ -78,13 +80,13 @@ class ResLoss(nn.Module):
 
 class WGAN_DIV_Loss(nn.Module):
     def __init__(self, dim=1):
-        super(WGAN_DIV_Loss, self).__init__()
+        super().__init__()
         self.dim = dim
 
     def forward(self, real_val, real_img, fake_val, fake_img):
         device = real_val.device
-        real_grad_out = Variable(torch.FloatTensor(real_val.size(0), self.dim).fill_(1.0), requires_grad=False).to(device)
-        fake_grad_out = Variable(torch.FloatTensor(fake_val.size(0), self.dim).fill_(0.0), requires_grad=False).to(device)
+        real_grad_out = torch.ones(real_val.size(0), self.dim, device=device)
+        fake_grad_out = torch.zeros(fake_val.size(0), self.dim, device=device)
         
         real_loss = F.binary_cross_entropy_with_logits(real_val, real_grad_out)
         fake_loss = F.binary_cross_entropy_with_logits(fake_val, fake_grad_out)

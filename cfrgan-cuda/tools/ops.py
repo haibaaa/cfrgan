@@ -26,7 +26,7 @@ class MedianPool2d(nn.Module):
          same: override padding and enforce same padding, boolean
     """
     def __init__(self, kernel_size=3, stride=1, padding=0, same=False):
-        super(MedianPool2d, self).__init__()
+        super().__init__()
         self.k = _pair(kernel_size)
         self.stride = _pair(stride)
         self.padding = _quadruple(padding)  # convert to l, r, t, b
@@ -63,12 +63,13 @@ class MedianPool2d(nn.Module):
 
 def get_gradient(image):
     # would likely be more efficient to implement from scratch at C/Cuda level
-    kernel_x = torch.FloatTensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]).unsqueeze(0).unsqueeze(0)
-    kernel_y = torch.FloatTensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]]).unsqueeze(0).unsqueeze(0)
+    kernel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+    kernel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
     
     if image.is_cuda:
-        kernel_x = kernel_x.cuda(image.get_device())
-        kernel_y = kernel_y.cuda(image.get_device())
+        device = image.device
+        kernel_x = kernel_x.to(device)
+        kernel_y = kernel_y.to(device)
     
     gradient_x = F.conv2d(image, kernel_x, padding=1)
     gradient_y = F.conv2d(image, kernel_y, padding=1)
