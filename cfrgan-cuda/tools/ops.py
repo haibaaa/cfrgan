@@ -4,6 +4,14 @@ import torch.nn.functional as F
 import torch.nn as nn
 from torch.nn.modules.utils import _pair, _quadruple
 import math
+import cv2
+
+# Set CUDA device and configurations
+torch.cuda.set_device(0)
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+torch.backends.cudnn.allow_fp16_reduced_precision_reduction = True
 
 class MedianPool2d(nn.Module):
     """ Median pool (usable as median filter when stride=1) module.
@@ -48,6 +56,21 @@ class MedianPool2d(nn.Module):
         x = x.unfold(2, self.k[0], self.stride[0]).unfold(3, self.k[1], self.stride[1])
         x = x.contiguous().view(x.size()[:4] + (-1,)).median(dim=-1)[0]
         return x
+
+
+def get_gradient(image):
+    # would likely be more efficient to implement from scratch at C/Cuda level
+    kernel_x = torch.FloatTensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]).unsqueeze(0).unsqueeze(0)
+    kernel_y = torch.FloatTensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]]).unsqueeze(0).unsqueeze(0)
+    
+    if image.is_cuda:
+        kernel_x = kernel_x.cuda(image.get_device())
+        kernel_y = kernel_y.cuda(image.get_device())
+    
+    gradient_x = F.conv2d(image, kernel_x, padding=1)
+    gradient_y = F.conv2d(image, kernel_y, padding=1)
+    
+    return gradient_x, gradient_y
 
 
 def sobel_xy(image, norm='L1'):

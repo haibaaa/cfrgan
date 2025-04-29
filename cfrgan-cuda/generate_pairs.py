@@ -4,6 +4,15 @@ from ctypes import ArgumentError
 import os ; import sys 
 os.chdir( os.path.split( os.path.realpath( sys.argv[0] ) )[0] ) 
 
+# Set CUDA device and configurations
+torch.cuda.set_device(0)
+cudnn.benchmark = True
+cudnn.deterministic = True
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+torch.backends.cudnn.allow_fp16_reduced_precision_reduction = True
+
 from mmRegressor.network.resnet50_task import *
 from mmRegressor.preprocess_img import Preprocess
 from mmRegressor.load_data import *
@@ -40,6 +49,14 @@ class Estimator3D(object):
         self.is_cuda = is_cuda
         self.render_size = render_size
         self.cuda_id = cuda_id
+        
+        # Set CUDA device
+        if is_cuda:
+            torch.cuda.set_device(cuda_id)
+            device = torch.device(f'cuda:{cuda_id}')
+        else:
+            device = torch.device('cpu')
+            
         # Network, cfg
         if det_net is not None:
             self.det_net = det_net[0]
@@ -65,10 +82,7 @@ class Estimator3D(object):
         self.skin_mask = -1*self.face_model.skin_mask.unsqueeze(-1)
         
         if is_cuda:
-            device = torch.device('cuda:'+str(cuda_id))
             self.tri = self.tri.cuda(cuda_id)
-        else:
-            device = torch.device('cpu')
 
         # Camera and renderer settings
         blend_params = BlendParams(background_color=(0.0,0.0,0.0))

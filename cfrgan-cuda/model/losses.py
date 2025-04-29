@@ -6,17 +6,26 @@ from model.networks import VGG19
 # from utils import load_state_dict
 from torch.autograd import Variable
 
+# Set CUDA device and configurations
+torch.cuda.set_device(0)
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+torch.backends.cudnn.allow_fp16_reduced_precision_reduction = True
 
 class PerceptualLoss(nn.Module):
-    def __init__(self, model_type='resnet'):
+    def __init__(self, model_type='vgg'):
         super(PerceptualLoss, self).__init__()
-        if model_type=='resnet':
-            self.criterion = ResLoss()
-        elif model_type=='vgg':
-            self.criterion = VGGLoss()
+        if model_type == 'vgg':
+            from model.vgg import VGG19
+            self.vgg = VGG19()
+            if torch.cuda.is_available():
+                self.vgg = self.vgg.cuda()
         else:
-            raise ValueError('Model type should be one of resnet or vgg')
-    
+            raise NotImplementedError('Model type [%s] is not implemented' % model_type)
+        self.criterion = nn.L1Loss()
+        self.weights = [1.0/32, 1.0/16, 1.0/8, 1.0/4, 1.0]
+
     def forward(self, y_hat, y):
         return self.criterion(y_hat, y)
 
@@ -65,30 +74,18 @@ class ResLoss(nn.Module):
 
 
 class WGAN_DIV_Loss(nn.Module):
-    def __init__(self, k=2, p=6, dim=289):
+    def __init__(self, dim=1):
         super(WGAN_DIV_Loss, self).__init__()
-        self.k = k
-        self.p = p
         self.dim = dim
-    
-    def forward(self, real_val, y, fake_val, y_hat):
-        real_grad_out = Variable(torch.cuda.FloatTensor(real_val.size(0), self.dim).fill_(1.0), requires_grad=False)
-        real_grad = torch.autograd.grad(
-            real_val, y, real_grad_out, create_graph=True, retain_graph=True, only_inputs=True)[0]
-        real_grad_norm = real_grad.view(real_grad.size(0), -1).pow(2).sum(1) ** (self.p/2)
 
-        fake_grad_out = Variable(torch.cuda.FloatTensor(fake_val.size(0), self.dim).fill_(0.0), requires_grad=False)
-        fake_grad = torch.autograd.grad(
-            fake_val, y_hat, fake_grad_out, create_graph=True, retain_graph=True, only_inputs=True)[0]
-        fake_grad_norm = fake_grad.view(fake_grad.size(0), -1).pow(2).sum(1) ** (self.p/2)
-
-        div_gp = torch.mean(real_grad_norm + fake_grad_norm) * self.k / 2
-
-        # WGAN-DIV loss
-        loss_D = -torch.mean(real_val) + torch.mean(fake_val) + div_gp
-        # Spectral normalization loss
-        # loss_D = torch.mean(F.relu(-1 + real_val)) + torch.mean(F.relu(-1-fake_val))
-    
-        return loss_D
+    def forward(self, real_val, real_img, fake_val, fake_img):
+        device = real_val.device
+        real_grad_out = Variable(torch.FloatTensor(real_val.size(0), self.dim).fill_(1.0), requires_grad=False).to(device)
+        fake_grad_out = Variable(torch.FloatTensor(fake_val.size(0), self.dim).fill_(0.0), requires_grad=False).to(device)
+        
+        real_loss = F.binary_cross_entropy_with_logits(real_val, real_grad_out)
+        fake_loss = F.binary_cross_entropy_with_logits(fake_val, fake_grad_out)
+        
+        return real_loss + fake_loss
     
 

@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import math
 # 19-4-12  pytorch
 
 # input: coeff with shape [1,257]
@@ -28,7 +29,7 @@ class _need_const:
 
     focal = 1015.0
     center = 112.0
-    cam_pos = 10
+    cam_pos = 10.0
     p_matrix = np.concatenate([[focal], [0.0], [center], [0.0], [focal], [center], [0.0], [0.0], [1.0]],
                               axis=0).astype(np.float32)  # projection matrix
     p_matrix = np.reshape(p_matrix, [1, 3, 3])
@@ -92,35 +93,36 @@ def Compute_norm(face_shape,facemodel):
 # input: angles with shape [1,3]
 # output: rotation matrix with shape [1,3,3]
 def Compute_rotation_matrix(angles):
-
-    n_b = angles.size(0)
-    sinx = torch.sin(angles[:, 0])
-    siny = torch.sin(angles[:, 1])
-    sinz = torch.sin(angles[:, 2])
-    cosx = torch.cos(angles[:, 0])
-    cosy = torch.cos(angles[:, 1])
-    cosz = torch.cos(angles[:, 2])
-
-    rotXYZ = torch.eye(3).view(1, 3, 3).repeat(n_b * 3, 1, 1).view(3, n_b, 3, 3)
-
-    if angles.is_cuda: rotXYZ = rotXYZ.cuda()
-
-    rotXYZ[0, :, 1, 1] = cosx
-    rotXYZ[0, :, 1, 2] = -sinx
-    rotXYZ[0, :, 2, 1] = sinx
-    rotXYZ[0, :, 2, 2] = cosx
-    rotXYZ[1, :, 0, 0] = cosy
-    rotXYZ[1, :, 0, 2] = siny
-    rotXYZ[1, :, 2, 0] = -siny
-    rotXYZ[1, :, 2, 2] = cosy
-    rotXYZ[2, :, 0, 0] = cosz
-    rotXYZ[2, :, 0, 1] = -sinz
-    rotXYZ[2, :, 1, 0] = sinz
-    rotXYZ[2, :, 1, 1] = cosz
-
-    rotation = rotXYZ[2].bmm(rotXYZ[1]).bmm(rotXYZ[0])
-
-    return rotation.permute(0, 2, 1)
+    device = angles.device
+    batch_size = angles.shape[0]
+    ones = torch.ones([batch_size, 1]).to(device)
+    zeros = torch.zeros([batch_size, 1]).to(device)
+    
+    x, y, z = angles[:, 0], angles[:, 1], angles[:, 2]
+    
+    rot_x = torch.cat([
+        ones, zeros, zeros,
+        zeros, torch.cos(x).unsqueeze(1), -torch.sin(x).unsqueeze(1),
+        zeros, torch.sin(x).unsqueeze(1), torch.cos(x).unsqueeze(1)
+    ], dim=1).reshape([batch_size, 3, 3])
+    
+    rot_y = torch.cat([
+        torch.cos(y).unsqueeze(1), zeros, torch.sin(y).unsqueeze(1),
+        zeros, ones, zeros,
+        -torch.sin(y).unsqueeze(1), zeros, torch.cos(y).unsqueeze(1)
+    ], dim=1).reshape([batch_size, 3, 3])
+    
+    rot_z = torch.cat([
+        torch.cos(z).unsqueeze(1), -torch.sin(z).unsqueeze(1), zeros,
+        torch.sin(z).unsqueeze(1), torch.cos(z).unsqueeze(1), zeros,
+        zeros, zeros, ones
+    ], dim=1).reshape([batch_size, 3, 3])
+    
+    rotXYZ = torch.matmul(torch.matmul(rot_z, rot_y), rot_x)
+    if angles.is_cuda:
+        rotXYZ = rotXYZ.cuda(angles.get_device())
+    
+    return rotXYZ
 
 # project 3D face onto image plane
 # input: face_shape with shape [1,N,3]

@@ -3,17 +3,23 @@ from PIL import Image
 from scipy.io import loadmat,savemat
 from array import array
 import torch
+import scipy.io as sio
+
+# Set CUDA device and configurations
+torch.cuda.set_device(0)
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+torch.backends.cudnn.allow_fp16_reduced_precision_reduction = True
 
 # define facemodel for reconstruction
 class BFM():
-    def __init__(self, fmodel, gpu_id=0):
-        self.fmodel = fmodel
-        self.to_torch(gpu_id)
-
-    def to_torch(self, gpu_id):
-        self.model = loadmat(self.fmodel)
-
-        if gpu_id != -1:
+    def __init__(self, model_path, gpu_id=0):
+        self.model = sio.loadmat(model_path)
+        self.gpu_id = gpu_id
+        
+        # Move data to GPU
+        if torch.cuda.is_available():
             self.meanshape = torch.from_numpy(self.model['meanshape']).cuda(gpu_id).squeeze(0)  # mean face shape
             self.idBase = torch.from_numpy(self.model['idBase']).cuda(gpu_id)  # identity basis
             self.exBase = torch.from_numpy(self.model['exBase']).type(torch.FloatTensor).cuda(gpu_id)  # expression basis

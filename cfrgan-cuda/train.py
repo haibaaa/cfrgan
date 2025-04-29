@@ -27,6 +27,15 @@ from tools.logger import CFRLogger
 import random
 from backbone import IR_SE_50
 
+# Set CUDA device and configurations
+torch.cuda.set_device(0)  # Set default device
+cudnn.benchmark = True
+cudnn.deterministic = True
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+torch.backends.cudnn.allow_fp16_reduced_precision_reduction = True
+
 parser = argparse.ArgumentParser(description='Complete Face Recovery GAN')
 parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
@@ -139,41 +148,26 @@ def main_worker(gpu, ngpus_per_node, args):
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
     elif args.distributed:
-        # For multiprocessing distributed, DistributedDataParallel constructor
-        # should always set the single device scope, otherwise,
-        # DistributedDataParallel will use all available devices.
         if args.gpu is not None:
             torch.cuda.set_device(args.gpu)
-            model.cuda(args.gpu)
-            discriminator.cuda(args.gpu)
-            # When using a single GPU per process and per
-            # DistributedDataParallel, we need to divide the batch size
-            # ourselves based on the total number of GPUs we have
-            args.batch_size = int(args.batch_size / ngpus_per_node)
-            args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-            discriminator = torch.nn.parallel.DistributedDataParallel(discriminator, device_ids=[args.gpu])
+            model = model.cuda(args.gpu)
+            discriminator = discriminator.cuda(args.gpu)
+            model = DDP(model, device_ids=[args.gpu])
+            discriminator = DDP(discriminator, device_ids=[args.gpu])
         else:
-            model.cuda()
-            discriminator.cuda()
-            # DistributedDataParallel will divide and allocate batch_size to all
-            # available GPUs if device_ids are not set
-            model = torch.nn.parallel.DistributedDataParallel(model)
-            discriminator = torch.nn.parallel.DistributedDataParallel(discriminator)
+            model = model.cuda()
+            discriminator = discriminator.cuda()
+            model = DDP(model)
+            discriminator = DDP(discriminator)
     elif args.gpu is not None:
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
         discriminator = discriminator.cuda(args.gpu)
     else:
-        # DataParallel will divide and allocate batch_size to all available GPUs
-        if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
-            model.features = torch.nn.DataParallel(model.features)
-            discriminator.features = torch.nn.DataParallel(discriminator.features)
-            model.cuda()
-            discriminator.cuda()
-        else:
-            model = torch.nn.DataParallel(model).cuda()
-            discriminator = torch.nn.DataParallel(discriminator).cuda()
+        model = model.cuda()
+        discriminator = discriminator.cuda()
+        model = torch.nn.DataParallel(model)
+        discriminator = torch.nn.DataParallel(discriminator)
 
     criterion_per = PerceptualLoss(model_type=args.perceptual_model)
     criterion_l1 = torch.nn.L1Loss()

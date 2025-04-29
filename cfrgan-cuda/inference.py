@@ -7,6 +7,15 @@ import cv2
 import torch
 import argparse
 
+# Set CUDA device and configurations
+torch.cuda.set_device(0)
+cudnn.benchmark = True
+cudnn.deterministic = True
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+torch.backends.cudnn.allow_fp16_reduced_precision_reduction = True
+
 from generate_pairs import Estimator3D
 
 from model.networks import CFRNet
