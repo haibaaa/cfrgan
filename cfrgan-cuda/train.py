@@ -28,13 +28,16 @@ import random
 from backbone import IR_SE_50
 
 # Set CUDA device and configurations
-torch.cuda.set_device(0)  # Set default device
-cudnn.benchmark = True
-cudnn.deterministic = True
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
-torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
-torch.backends.cudnn.allow_fp16_reduced_precision_reduction = True
+if torch.cuda.is_available():
+    torch.cuda.set_device(0)  # Set default device
+    cudnn.benchmark = True
+    cudnn.deterministic = True
+    # Enable TF32 for better performance on Ampere GPUs
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    # Set memory allocator settings
+    torch.cuda.set_per_process_memory_fraction(0.8)  # Use up to 80% of GPU memory
+    torch.cuda.empty_cache()
 
 parser = argparse.ArgumentParser(description='Complete Face Recovery GAN')
 parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
