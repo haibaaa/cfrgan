@@ -503,7 +503,18 @@ if __name__=='__main__':
     # create models
     # Face parsing network
     bisenet = BiSeNet(n_classes=19)
-    bisenet.load_state_dict(torch.load('faceParsing/model_final_diss.pth', map_location='cuda:'+str(cuda_id)))
+    try:
+        # Try loading with different map locations
+        try:
+            bisenet.load_state_dict(torch.load('faceParsing/model_final_diss.pth', map_location='cuda:'+str(cuda_id)))
+        except:
+            # If GPU loading fails, try CPU
+            bisenet.load_state_dict(torch.load('faceParsing/model_final_diss.pth', map_location='cpu'))
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        print("Please ensure the model file is not corrupted and is compatible with your PyTorch version")
+        print("Current PyTorch version:", torch.__version__)
+        sys.exit(1)
     bisenet.cuda(cuda_id)
     bisenet.eval()
     # 3D face regressor
